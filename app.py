@@ -10,7 +10,7 @@ from flask import Flask, jsonify, request, send_from_directory, make_response
 
 DB = os.getenv("PGDATABASE", "ciclorota_bh")
 USER = os.getenv("PGUSER", "postgres")
-PWD = os.getenv("PGPASSWORD", "203695")
+PWD = os.getenv("PGPASSWORD", "postgres")
 HOST = os.getenv("PGHOST", "localhost")
 PORT = os.getenv("PGPORT", "5432")
 SRID = 31983

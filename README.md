@@ -30,7 +30,7 @@ Por padrão, os scripts usam:
 - **Banco**: `ciclorota_bh`
 - **Usuário**: `postgres`
 - **Senha (setup_database.py)**: `postgres`
-- **Senha (app.py)**: `203695`
+- **Senha (app.py)**: `postgres`
 - **Host**: `localhost:5432`
 
 
