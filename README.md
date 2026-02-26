@@ -49,6 +49,7 @@ Este script irá:
 - Criar índices espaciais e tabela de vértices
 
 As base de dados das curvas de nível e circulacao viária são muito pesadas para subir no github, mas podem ser baixadas nos links abaixo
+
 Circulação Viária: https://geoservicos.pbh.gov.br/geoserver/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=ide_bhgeo:CIRCULACAO_VIARIA&srsName=EPSG:31983&outputFormat=csv
 
 Curvas de Nível 5M: https://geoservicos.pbh.gov.br/geoserver/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=ide_bhgeo:CURVA_DE_NIVEL_5M&srsName=EPSG:31983&outputFormat=csv
