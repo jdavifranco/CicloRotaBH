@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CicloRota BH</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',system-ui,sans-serif}
+    #map{width:100%;height:100vh}
+
+    .panel{position:absolute;z-index:1000;background:#fff;border-radius:10px;
+      box-shadow:0 2px 12px rgba(0,0,0,.15);font-size:13px;color:#333}
+
+    /* Painel direito - rotas */
+    .ctrl{top:12px;right:12px;width:300px;padding:16px}
+    .ctrl h3{font-size:15px;margin-bottom:10px;color:#2c3e50}
+    .step{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0}
+    .dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+    .dot-o{background:#27ae60} .dot-d{background:#e74c3c}
+    .lbl{font-size:12px;color:#666}
+    .coord{font-family:monospace;font-size:10px;color:#aaa}
+    .btn{display:block;width:100%;padding:9px;margin-top:8px;border:none;border-radius:7px;
+      font-size:13px;font-weight:600;cursor:pointer}
+    .btn:disabled{opacity:.4;cursor:default}
+    .btn-go{background:#3498db;color:#fff} .btn-go:hover:not(:disabled){background:#2980b9}
+    .btn-clr{background:#ecf0f1;color:#7f8c8d} .btn-clr:hover{background:#dfe6e9}
+    .msg{font-size:11px;color:#999;margin-top:4px}
+    .toggles{display:flex;gap:6px;margin-top:10px;display:none}
+    .toggles label{flex:1;display:flex;align-items:center;gap:5px;padding:5px 7px;border-radius:6px;
+      cursor:pointer;font-size:11px;font-weight:600;border:2px solid #eee}
+    .toggles input{display:none}
+    .toggles .on-s{border-color:#3498db;background:#ebf5fb}
+    .toggles .on-r{border-color:#2c3e50;background:#f4f6f7}
+    .ln{width:16px;height:3px;border-radius:2px;flex-shrink:0}
+    table.cmp{width:100%;border-collapse:collapse;font-size:11px;margin-top:10px;display:none}
+    table.cmp th,table.cmp td{padding:4px 5px;text-align:center;border-bottom:1px solid #f0f0f0}
+    table.cmp th:first-child,table.cmp td:first-child{text-align:left;color:#888}
+    .c-s{color:#2980b9;font-weight:700} .c-r{color:#2c3e50;font-weight:700}
+    .good{color:#27ae60!important;font-weight:700} .bad{color:#e74c3c!important;font-weight:700}
+
+    /* Painel esquerdo - camadas */
+    .layers{top:12px;left:12px;padding:12px 14px;width:220px}
+    .layers h4{font-size:13px;margin-bottom:8px;color:#2c3e50}
+    .ly{display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;user-select:none}
+    .ly:hover{opacity:.8}
+    .ly-box{width:14px;height:14px;border-radius:3px;border:2px solid #ccc;flex-shrink:0;transition:.15s}
+    .ly-box.on{border-color:currentColor;background:currentColor}
+    .ly-label{font-size:12px;color:#555}
+    .ly-load{font-size:10px;color:#aaa;margin-left:auto}
+
+    /* Legenda */
+    .legend{bottom:20px;right:12px;padding:12px;display:none}
+    .legend h4{font-size:12px;margin-bottom:6px;color:#2c3e50}
+    .legend-i{display:flex;align-items:center;gap:6px;font-size:11px;padding:2px 0}
+    .legend-l{width:20px;height:3px;border-radius:2px;flex-shrink:0}
+  </style>
+</head>
+<body>
+<div id="map"></div>
+
+<!-- Painel camadas (esquerda) -->
+<div class="panel layers" id="layers-panel">
+  <h4>Camadas</h4>
+  <div class="ly" data-layer="circulacao_viaria">
+    <div class="ly-box" style="color:#999"></div>
+    <span class="ly-label">Circulacao Viaria</span>
+    <span class="ly-load"></span>
+  </div>
+  <div class="ly" data-layer="ciclovia">
+    <div class="ly-box" style="color:#27ae60"></div>
+    <span class="ly-label">Rota Cicloviaria</span>
+    <span class="ly-load"></span>
+  </div>
+  <div class="ly" data-layer="rodovia">
+    <div class="ly-box" style="color:#e74c3c"></div>
+    <span class="ly-label">Rodovia</span>
+    <span class="ly-load"></span>
+  </div>
+  <div class="ly" data-layer="obra_arte">
+    <div class="ly-box" style="color:#e67e22"></div>
+    <span class="ly-label">Obra de Arte</span>
+    <span class="ly-load"></span>
+  </div>
+</div>
+
+<!-- Painel rotas (direita) -->
+<div class="panel ctrl" id="ctrl">
+  <h3>&#x1f6b2; CicloRota BH</h3>
+  <div class="step">
+    <div class="dot dot-o"></div>
+    <div><div class="lbl" id="o-lbl">Clique no mapa: origem</div><div class="coord" id="o-c"></div></div>
+  </div>
+  <div class="step">
+    <div class="dot dot-d"></div>
+    <div><div class="lbl" id="d-lbl">Depois: destino</div><div class="coord" id="d-c"></div></div>
+  </div>
+  <button class="btn btn-go" id="go" disabled>Calcular rotas</button>
+  <button class="btn btn-clr" id="clr">Limpar</button>
+  <div class="msg" id="msg"></div>
+
+  <div class="toggles" id="toggles">
+    <label id="tg-s" class="on-s"><input type="checkbox" id="cb-s" checked><span class="ln" style="background:#3498db"></span>Segura</label>
+    <label id="tg-r" class="on-r"><input type="checkbox" id="cb-r" checked><span class="ln" style="background:#2c3e50;border:1px dashed #555;height:1px"></span>Rapida</label>
+  </div>
+
+  <table class="cmp" id="cmp">
+    <tr><th></th><th class="c-s">Segura</th><th class="c-r">Rapida</th></tr>
+    <tr><td>Distancia</td><td id="s-d"></td><td id="r-d"></td></tr>
+    <tr><td>Subida total</td><td id="s-sub"></td><td id="r-sub"></td></tr>
+    <tr><td>Descida total</td><td id="s-des"></td><td id="r-des"></td></tr>
+    <tr><td>Trechos</td><td id="s-t"></td><td id="r-t"></td></tr>
+    <tr><td>Em rodovia</td><td id="s-rod"></td><td id="r-rod"></td></tr>
+    <tr><td>Em obra de arte</td><td id="s-oa"></td><td id="r-oa"></td></tr>
+    <tr><td>Em ciclovia</td><td id="s-cic"></td><td id="r-cic"></td></tr>
+  </table>
+</div>
+
+<!-- Legenda -->
+<div class="panel legend" id="leg">
+  <h4>Legenda - Rota Segura</h4>
+  <div class="legend-i"><span class="legend-l" style="background:#3498db"></span>Plano / descida</div>
+  <div class="legend-i"><span class="legend-l" style="background:#f1c40f"></span>Subida leve (5-10%)</div>
+  <div class="legend-i"><span class="legend-l" style="background:#e67e22"></span>Subida moderada (10-15%)</div>
+  <div class="legend-i"><span class="legend-l" style="background:#e74c3c"></span>Subida forte (&gt;15%)</div>
+  <div class="legend-i"><span class="legend-l" style="background:#2c3e50;border-top:2px dashed #555;height:0"></span>Rota rapida</div>
+</div>
+
+<script>
+const map = L.map('map',{
+  maxBounds:[[-20.1,-44.2],[-19.7,-43.72]], maxBoundsViscosity:1, minZoom:12, maxZoom:19
+}).setView([-19.92,-43.94],13);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'&copy; OSM | CicloRota BH'
+}).addTo(map);
+
+let origem=null, destino=null, mO=null, mD=null, lSeg=null, lRap=null;
+const ico=(color)=>L.divIcon({className:'',iconSize:[18,18],iconAnchor:[9,9],
+  html:`<div style="width:18px;height:18px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`});
+
+fetch('/api/status').then(r=>r.json()).then(d=>{
+  if(!d.ok) document.getElementById('msg').textContent='Banco nao configurado. Rode: python setup_database.py';
+});
+
+// =========================================================================
+// CAMADAS
+// =========================================================================
+const layerState = {};
+const layerStyles = {
+  circulacao_viaria: {color:'#999', weight:1, opacity:.4},
+  ciclovia:          {color:'#27ae60', weight:3, opacity:.8},
+  rodovia:           {color:'#e74c3c', weight:3, opacity:.8},
+  obra_arte:         {color:'#e67e22', weight:2, opacity:.7, fillColor:'#e67e22', fillOpacity:.25},
+};
+const layerCache = {};
+
+function getBbox(){
+  const b=map.getBounds();
+  return `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
+}
+
+async function loadLayer(name){
+  const el=document.querySelector(`.ly[data-layer="${name}"] .ly-load`);
+  el.textContent='...';
+
+  let url=`/api/camada/${name}`;
+  if(name==='circulacao_viaria') url+=`?bbox=${getBbox()}`;
+
+  try{
+    const res=await fetch(url);
+    const data=await res.json();
+    el.textContent='';
+
+    if(layerState[name]) map.removeLayer(layerState[name]);
+
+    const style=layerStyles[name];
+    const layer=L.geoJSON(data,{
+      style:()=>style,
+      onEachFeature:(f,ly)=>{
+        const p=f.properties;
+        let tip='';
+        if(name==='circulacao_viaria') tip=`${p.tipo||''} ${p.logradouro||''}`.trim()||'Trecho';
+        else if(name==='ciclovia') tip=`<b>${p.nome||'Ciclovia'}</b><br>${p.tipo||''} - ${p.situacao||''}`;
+        else if(name==='rodovia') tip='Faixa de rodagem - Rodovia';
+        else if(name==='obra_arte') tip=`<b>${p.nome||'Obra de arte'}</b><br>${p.tipo||''}`;
+        if(tip) ly.bindTooltip(tip,{sticky:true});
+      }
+    });
+
+    layer.addTo(map);
+    layerState[name]=layer;
+    layerCache[name]=true;
+  }catch(e){
+    el.textContent='erro';
+  }
+}
+
+function removeLayer(name){
+  if(layerState[name]){map.removeLayer(layerState[name]);delete layerState[name]}
+}
+
+document.querySelectorAll('.ly').forEach(el=>{
+  el.addEventListener('click',()=>{
+    const name=el.dataset.layer;
+    const box=el.querySelector('.ly-box');
+    const active=box.classList.contains('on');
+    if(active){
+      box.classList.remove('on');
+      removeLayer(name);
+    }else{
+      box.classList.add('on');
+      loadLayer(name);
+    }
+  });
+});
+
+// Recarregar circulacao_viaria ao mover o mapa (se ativa)
+let cvTimeout=null;
+map.on('moveend',()=>{
+  const box=document.querySelector('.ly[data-layer="circulacao_viaria"] .ly-box');
+  if(!box.classList.contains('on')) return;
+  clearTimeout(cvTimeout);
+  cvTimeout=setTimeout(()=>loadLayer('circulacao_viaria'),300);
+});
+
+// =========================================================================
+// ROTAS
+// =========================================================================
+map.on('click', e=>{
+  const {lat,lng}=e.latlng;
+  if(!origem){
+    origem=[lat,lng];
+    if(mO) map.removeLayer(mO);
+    mO=L.marker([lat,lng],{icon:ico('#27ae60')}).addTo(map);
+    document.getElementById('o-lbl').textContent='Origem definida';
+    document.getElementById('o-c').textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    document.getElementById('d-lbl').textContent='Clique no mapa: destino';
+  } else if(!destino){
+    destino=[lat,lng];
+    if(mD) map.removeLayer(mD);
+    mD=L.marker([lat,lng],{icon:ico('#e74c3c')}).addTo(map);
+    document.getElementById('d-lbl').textContent='Destino definido';
+    document.getElementById('d-c').textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    document.getElementById('go').disabled=false;
+  }
+});
+
+document.getElementById('clr').addEventListener('click',()=>{
+  origem=destino=null;
+  [mO,mD,lSeg,lRap].forEach(l=>{if(l)map.removeLayer(l)});
+  mO=mD=lSeg=lRap=null;
+  document.getElementById('o-lbl').textContent='Clique no mapa: origem';
+  document.getElementById('d-lbl').textContent='Depois: destino';
+  document.getElementById('o-c').textContent='';
+  document.getElementById('d-c').textContent='';
+  document.getElementById('go').disabled=true;
+  document.getElementById('msg').textContent='';
+  document.getElementById('cmp').style.display='none';
+  document.getElementById('toggles').style.display='none';
+  document.getElementById('leg').style.display='none';
+});
+
+function segStyle(f){
+  const s=f.properties.inclinacao||0;
+  let color='#3498db';
+  if(s>15) color='#e74c3c';
+  else if(s>10) color='#e67e22';
+  else if(s>5) color='#f1c40f';
+  return {color, weight:5, opacity:.9};
+}
+function rapStyle(){ return {color:'#2c3e50', weight:4, opacity:.7, dashArray:'8 6'} }
+
+function tip(f,layer){
+  const p=f.properties;
+  const dn=p.desnivel||0;
+  const ar = dn>0.5?'&#x2197; subida': dn<-0.5?'&#x2198; descida':'&#x2192; plano';
+  let tags=[];
+  if(p.eh_ciclovia) tags.push('<span style="color:#27ae60;font-weight:700">CICLOVIA</span>');
+  if(p.eh_rodovia) tags.push('<span style="color:#e74c3c;font-weight:700">RODOVIA</span>');
+  if(p.eh_obra_arte) tags.push('<span style="color:#e67e22;font-weight:700">OBRA DE ARTE</span>');
+  const tagLine=tags.length?tags.join(' | ')+'<br>':'';
+  layer.bindTooltip(
+    `<b>${p.logradouro||p.tipo||'Trecho'}</b><br>`+tagLine+
+    `${p.comprimento}m | ${p.elev_inicio}m &rarr; ${p.elev_fim}m<br>`+
+    `${ar} ${Math.abs(dn).toFixed(1)}m (${Math.abs(p.inclinacao||0).toFixed(1)}%)`,
+    {sticky:true});
+}
+
+function fill(idS,idR,vS,vR,lower){
+  const eS=document.getElementById(idS), eR=document.getElementById(idR);
+  eS.textContent=vS; eR.textContent=vR;
+  eS.className='c-s'; eR.className='c-r';
+  const nS=parseFloat(vS), nR=parseFloat(vR);
+  if(!isNaN(nS)&&!isNaN(nR)&&nS!==nR){
+    if(lower){(nS<nR?eS:eR).classList.add('good');(nS>nR?eS:eR).classList.add('bad')}
+    else{(nS>nR?eS:eR).classList.add('good');(nS<nR?eS:eR).classList.add('bad')}
+  }
+}
+
+document.getElementById('go').addEventListener('click', async()=>{
+  if(!origem||!destino) return;
+  document.getElementById('go').disabled=true;
+  document.getElementById('msg').textContent='Calculando...';
+
+  try{
+    const res=await fetch('/api/rota',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({origem,destino})});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error||'Erro');
+
+    [lRap,lSeg].forEach(l=>{if(l)map.removeLayer(l)});
+
+    if(data.rapida) lRap=L.geoJSON(data.rapida,{style:rapStyle,onEachFeature:tip}).addTo(map);
+    if(data.segura) lSeg=L.geoJSON(data.segura,{style:segStyle,onEachFeature:tip}).addTo(map);
+
+    const b=L.latLngBounds([]);
+    if(lSeg) b.extend(lSeg.getBounds());
+    if(lRap) b.extend(lRap.getBounds());
+    if(b.isValid()) map.fitBounds(b,{padding:[50,50]});
+
+    const s=data.resumo_segura||{}, r=data.resumo_rapida||{};
+    const km=m=>m?(m/1000).toFixed(2)+' km':'--';
+    const mt=m=>m?m.toFixed(0)+' m':'0 m';
+
+    fill('s-d','r-d',km(s.distancia_m),km(r.distancia_m),true);
+    fill('s-sub','r-sub',mt(s.subida_total_m),mt(r.subida_total_m),true);
+    fill('s-des','r-des',mt(s.descida_total_m),mt(r.descida_total_m),false);
+    fill('s-t','r-t',s.trechos||0,r.trechos||0,true);
+    const rodFmt=r2=>(r2.trechos_rodovia||0)>0?`${r2.trechos_rodovia} (${mt(r2.dist_rodovia_m)})`:'0';
+    const oaFmt=r2=>(r2.trechos_obra_arte||0)>0?`${r2.trechos_obra_arte} (${mt(r2.dist_obra_arte_m)})`:'0';
+    fill('s-rod','r-rod',rodFmt(s),rodFmt(r),true);
+    fill('s-oa','r-oa',oaFmt(s),oaFmt(r),true);
+    const cicFmt=r2=>(r2.trechos_ciclovia||0)>0?`${r2.trechos_ciclovia} (${mt(r2.dist_ciclovia_m)})`:'0';
+    fill('s-cic','r-cic',cicFmt(s),cicFmt(r),false);
+
+    document.getElementById('cmp').style.display='table';
+    document.getElementById('toggles').style.display='flex';
+    document.getElementById('leg').style.display='block';
+    document.getElementById('msg').textContent='Rotas calculadas!';
+  }catch(e){
+    document.getElementById('msg').textContent='Erro: '+e.message;
+  }
+  document.getElementById('go').disabled=false;
+});
+
+document.getElementById('cb-s').addEventListener('change',e=>{
+  if(e.target.checked){if(lSeg)map.addLayer(lSeg);document.getElementById('tg-s').classList.add('on-s')}
+  else{if(lSeg)map.removeLayer(lSeg);document.getElementById('tg-s').classList.remove('on-s')}
+});
+document.getElementById('cb-r').addEventListener('change',e=>{
+  if(e.target.checked){if(lRap)map.addLayer(lRap);document.getElementById('tg-r').classList.add('on-r')}
+  else{if(lRap)map.removeLayer(lRap);document.getElementById('tg-r').classList.remove('on-r')}
+});
+</script>
+</body>
+</html>
