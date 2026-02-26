@@ -3,22 +3,18 @@
 Sistema de cálculo de rotas otimizadas para ciclistas em Belo Horizonte, utilizando banco de dados geográfico (PostgreSQL + PostGIS + pgRouting).
 
 A rota é calculada com base em um custo ponderado que considera:
-- **Declividade** do trecho (penaliza trechos íngremes)
-- **Faixa de rodagem de rodovia** (evita rodovias)
-- **Obras de arte** (evita viadutos, pontes e passarelas sem ciclovia)
-- **Rede de priorização de ônibus** (evita faixas exclusivas)
-- **Rotas cicloviárias** (prioriza trechos com ciclovia existente)
+- **Declividade** 
+- **Faixa de rodagem de rodovia** 
+- **Viadutos, pontes e passarelas** 
+- **Rotas cicloviárias** 
 
 ## Pré-requisitos
 
 1. **Python 3.8+**
 2. **PostgreSQL 14+** com as extensões:
-   - **PostGIS 3+** (`CREATE EXTENSION postgis`)
-   - **pgRouting 3+** (`CREATE EXTENSION pgrouting`)
+   - **PostGIS 3+** 
+   - **pgRouting 3+** 
 
-### Instalação do PostGIS e pgRouting (Windows)
-
-Ao instalar o PostgreSQL, utilize o **Stack Builder** para adicionar as extensões PostGIS e pgRouting. Elas ficam disponíveis na categoria "Spatial Extensions".
 
 ## Instalação
 
@@ -30,21 +26,14 @@ pip install -r requirements.txt
 
 ### 2. Configurar credenciais do banco (opcional)
 
-Por padrão, o sistema usa:
+Por padrão, os scripts usam:
 - **Banco**: `ciclorota_bh`
 - **Usuário**: `postgres`
-- **Senha**: `203695`
+- **Senha (setup_database.py)**: `postgres`
+- **Senha (app.py)**: `203695`
 - **Host**: `localhost:5432`
 
-Para alterar, defina variáveis de ambiente:
 
-```bash
-set PGDATABASE=ciclorota_bh
-set PGUSER=postgres
-set PGPASSWORD=sua_senha
-set PGHOST=localhost
-set PGPORT=5432
-```
 
 ### 3. Executar o setup do banco de dados
 
@@ -55,9 +44,14 @@ python setup_database.py
 Este script irá:
 - Criar o banco de dados `ciclorota_bh`
 - Habilitar PostGIS e pgRouting
-- Importar os 7 CSVs da pasta `base de dados/`
+- Importar os 5 CSVs da pasta `base de dados/`
 - Construir a rede de roteamento com custos ponderados
 - Criar índices espaciais e tabela de vértices
+
+As base de dados das curvas de nível e circulacao viária são muito pesadas para subir no github, mas podem ser baixadas nos links abaixo
+Circulação Viária: https://geoservicos.pbh.gov.br/geoserver/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=ide_bhgeo:CIRCULACAO_VIARIA&srsName=EPSG:31983&outputFormat=csv
+
+Curvas de Nível 5M: https://geoservicos.pbh.gov.br/geoserver/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=ide_bhgeo:CURVA_DE_NIVEL_5M&srsName=EPSG:31983&outputFormat=csv
 
 O processo leva alguns minutos dependendo do hardware.
 
@@ -73,48 +67,43 @@ Abra o navegador em: **http://localhost:5000**
 
 ## Uso
 
-1. **Visualize as camadas** no mapa (ciclovias, faixas de ônibus, rodovias, obras de arte)
+1. **Visualize as camadas** no mapa (ciclovias, circulação viária, rodovias, obras de arte)
 2. **Clique no mapa** para definir o ponto de **origem** (marcador verde)
 3. **Clique novamente** para definir o ponto de **destino** (marcador vermelho)
-4. **Clique em "Calcular rota segura"** para obter a melhor rota para ciclista
+4. **Clique em calcular rota** para obter:
+   - **Rota segura** (usa custo ponderado com elevação e penalidades)
+   - **Rota rápida** (prioriza menor distância)
 5. A rota é exibida com cores indicando o tipo de trecho:
    - Verde: ciclovia
    - Azul: via normal (baixa declividade)
    - Amarelo/laranja: declividade moderada a alta
    - Vermelho: declividade forte
 
-## Estrutura do Projeto
-
-```
-trabalho_pratico/
-├── base de dados/                 # Dados CSV do portal de dados de BH
-│   ├── CIRCULACAO_VIARIA.csv      # Rede viária (231k trechos)
-│   ├── DECLIVIDADE_TRECHO_LOGRADOURO_2015.csv
-│   ├── LOGRADOURO.csv
-│   ├── ROTA_CICLOVIARIA.csv
-│   ├── REDE_PRIORIZACAO_ONIBUS.csv
-│   ├── LOGRADOURO_OBRA_DE_ARTE.csv
-│   └── FAIXA_RODAGEM_RODOVIA.csv
-├── static/
-│   └── index.html                 # Frontend (Leaflet + mapa interativo)
-├── setup_database.py              # Setup do banco de dados
-├── app.py                         # API Flask
-├── requirements.txt               # Dependências Python
-└── README.md                      # Este arquivo
-```
 
 ## Função de Custo
 
-O custo de cada aresta da rede é calculado como:
+O custo da **rota segura** é calculado no `setup_database.py` com base em:
 
 ```
-custo = comprimento
-  × (1 + (declividade/10)²)       -- penalidade por declividade
-  × 100  se rodovia               -- praticamente bloqueia rodovias
-  × 50   se obra de arte          -- evita pontes/viadutos sem ciclovia
-  × 5    se faixa de ônibus       -- penaliza faixas exclusivas
-  × 0.3  se ciclovia              -- bonifica ciclovias (reduz custo a 30%)
+cost = comprimento
+  × fator_declividade_direta
+  × 100  se rodovia
+  × 50   se obra de arte
+  × 0.0  se ciclovia
+
+reverse_cost = comprimento
+  × fator_declividade_reversa
+  × 100  se rodovia
+  × 50   se obra de arte
+  × 0.0  se ciclovia
 ```
+
+Onde o fator de declividade:
+- Penaliza fortemente **subidas** (termo quadrático)
+- Dá bônus limitado em **descidas** (com piso mínimo)
+- Considera o sentido do trecho (`cost` e `reverse_cost`)
+
+Já a **rota rápida** usa `cost = comprimento` (menor distância).
 
 ## Tecnologias
 
